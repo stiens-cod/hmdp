@@ -10,11 +10,16 @@ import com.hmdp.service.IUserService;
 import com.hmdp.utils.RegexUtils;
 import com.hmdp.utils.UserHolder;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.web.bind.annotation.*;
 
 import javax.annotation.Resource;
 import javax.servlet.http.HttpSession;
 import java.util.Random;
+import java.util.concurrent.TimeUnit;
+
+import static com.hmdp.utils.RedisConstants.LOGIN_CODE_KEY;
+import static com.hmdp.utils.RedisConstants.LOGIN_CODE_TTL;
 
 /**
  * <p>
@@ -35,19 +40,29 @@ public class UserController {
     @Resource
     private IUserInfoService userInfoService;
 
+    @Resource
+    private StringRedisTemplate stringRedisTemplate;
+
+
     /**
      * 发送手机验证码
      */
     @PostMapping("code")
-    public Result sendCode(@RequestParam("phone") String phone, HttpSession session) {
-        // TODO 发送短信验证码并保存验证码
-        if(RegexUtils.isPhoneInvalid(phone)){
-            return Result.fail("手机号格式错误");
+    public Result sendCode(String phone, HttpSession session) {
+        // 1.校验手机号
+        if (RegexUtils.isPhoneInvalid(phone)) {
+            // 2.如果不符合，返回错误信息
+            return Result.fail("手机号格式错误！");
         }
+        // 3.符合，生成验证码
         String code = RandomUtil.randomNumbers(6);
 
-        session.setAttribute("code",code);
+        // 4.保存验证码到 redis
+        stringRedisTemplate.opsForValue().set(LOGIN_CODE_KEY + phone, code, LOGIN_CODE_TTL, TimeUnit.MINUTES);
+
+        // 5.发送验证码
         log.debug("发送短信验证码成功，验证码：{}", code);
+        // 返回ok
         return Result.ok();
     }
 
